@@ -85,3 +85,16 @@ After relaunching all the nodes, we can validate that the OpenSearch Dashboard t
 but once we turn on the proxy (`cd proxy; cargo run`) it correctly routes requests and the dashboard works as expected.
 
 ![Proxy handling requests](./assets/screenshot3.png)
+
+## Step 3 - hijacking requests
+
+Now the fun part - let's handle some request on our own, without sending it to OpenSearch nodes. For now, we'll focus only on the most basic query - without any filtering and fallback to OpenSearch nodes otherwise.
+
+The proxy code now will read the entire request and if it's a request to the `_search` endpoint it will try to parse and validate it.
+
+If it's a query without any filtering (exact same query as seen above), the code will return a response with our own list of results (for now hardcoded in memory) - see it returning 3 hits instead of 1 hit:
+
+![Hijacked results](./assets/screenshot4.png)
+
+In any other case, it will fall back to sending the request to the OpenSearch node. This way we can incrementally extend the compatibility.
+
