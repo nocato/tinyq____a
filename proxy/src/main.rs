@@ -14,7 +14,16 @@ use serde_json::json;
 use serde_json::Value;
 use serde_json::Value::{Array, Object};
 use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, TcpStream};
+
+#[derive(Debug)]
+struct Stats {
+    search_queries_success_count: u64,
+    search_queries_failure_count: u64,
+    nonsearch_passed_through_count: u64,
+    search_queries_failures: Vec<(String, Bytes)>,
+}
 
 /// Convert a Request with incoming data to a Request with the data streamed in and ready to go
 async fn request_with_streamed_body(
@@ -325,6 +334,7 @@ async fn handle_search_request(
 async fn handle_request(
     out_addr: &SocketAddr,
     req: Request<Bytes>,
+    stats: Arc<Mutex<Stats>>,
 ) -> Result<Response<http_body_util::Full<hyper::body::Bytes>>, hyper::Error> {
     static SEARCH_ENDPOINT: Lazy<Regex> = Lazy::new(|| Regex::new(r"^/([^/]*)/_search$").unwrap());
 
@@ -332,19 +342,88 @@ async fn handle_request(
         let res = handle_search_request(&req).await;
         match res {
             Ok(res) => {
+                stats.lock().unwrap().search_queries_success_count += 1;
                 return Ok(res);
             }
             Err(err) => {
+                let mut stats = stats.lock().unwrap();
+                stats.search_queries_failure_count += 1;
+                stats
+                    .search_queries_failures
+                    .push((err.clone(), req.body().clone()));
                 println!("Error handling search request: {}", err);
             }
         }
+    } else {
+        stats.lock().unwrap().nonsearch_passed_through_count += 1;
     }
 
     forward_request_to_opensearch(out_addr, &req).await
 }
 
+fn get_queries_failures(stats: Arc<Mutex<Stats>>) -> String {
+    let stats = stats.lock().unwrap();
+    let mut result = "".to_owned();
+
+    for (reason, body) in &stats.search_queries_failures {
+        result.push_str(format!("<div class='failure_row'><div class='failure_reason'>{}</div> <div class='failure_body'>{:#?}</div></div>", reason, std::str::from_utf8(body).unwrap_or("")).as_str());
+    }
+    result
+}
+
+use axum::{routing::get, Router};
+use tower_http::services::ServeFile;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Monitoring website
+    let stats1 = Arc::new(Mutex::new(Stats {
+        search_queries_success_count: 0,
+        search_queries_failure_count: 0,
+        nonsearch_passed_through_count: 0,
+        search_queries_failures: Vec::new(),
+    }));
+    let stats2 = stats1.clone();
+    let stats3 = stats1.clone();
+    let stats4 = stats1.clone();
+    let stats5 = stats1.clone();
+
+    let app = Router::new()
+        .route(
+            "/search_queries_success_count",
+            get(move || async move {
+                format!("{}", stats1.lock().unwrap().search_queries_success_count)
+            }),
+        )
+        .route(
+            "/search_queries_failure_count",
+            get(move || async move {
+                format!("{}", stats2.lock().unwrap().search_queries_failure_count)
+            }),
+        )
+        .route(
+            "/search_queries_failures",
+            get(move || async move { get_queries_failures(stats3) }),
+        )
+        .route(
+            "/nonsearch_passed_through_count",
+            get(move || async move {
+                format!("{}", stats4.lock().unwrap().nonsearch_passed_through_count)
+            }),
+        )
+        .route_service("/", ServeFile::new("../frontend/index.html"))
+        .route_service("/favicon.ico", ServeFile::new("../frontend/favicon.ico"));
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3001));
+    println!("listening on {}", addr);
+    tokio::task::spawn(async move {
+        hyper_server::bind(addr)
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
+    });
+
+    // Proxy
     let in_addr: SocketAddr = ([0, 0, 0, 0], 3000).into();
     let out_addr: SocketAddr = ([127, 0, 0, 1], 9200).into();
 
@@ -357,14 +436,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (stream, _) = listener.accept().await?;
         let io = TokioIo::new(stream);
 
-        let service = service_fn(move |req: hyper::Request<Incoming>| async move {
-            println!("-------------------------");
-            let req = request_with_streamed_body(req).await?;
-            println!("Got request: {:#?}", req);
+        let stats = stats5.clone();
 
-            let res = handle_request(&out_addr, req).await?;
-            println!("Sending back: {:#?}", res);
-            Ok::<Response<http_body_util::Full<hyper::body::Bytes>>, hyper::Error>(res)
+        let service = service_fn(move |req: hyper::Request<Incoming>| {
+            let stats = stats.clone();
+
+            async move {
+                println!("-------------------------");
+                let req = request_with_streamed_body(req).await?;
+                println!("Got request: {:#?}", req);
+
+                let res = handle_request(&out_addr, req, stats).await?;
+                println!("Sending back: {:#?}", res);
+
+                Ok::<Response<http_body_util::Full<hyper::body::Bytes>>, hyper::Error>(res)
+            }
         });
 
         tokio::task::spawn(async move {

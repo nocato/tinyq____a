@@ -12,3 +12,6 @@ regex = "1.10.4"
 once_cell = "1.19.0"
 serde_json = "1.0.116"
 http = "1.1.0"
+hyper-server = "0.6.0"
+axum = "0.6.20"
+tower-http = { version = "0.4", features = ["fs"] }

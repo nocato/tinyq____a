@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        <title>tinyq????a</title>
+        <link rel="icon" href="favicon.ico">  
+        <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2" crossorigin="anonymous"></script>
+        <!-- Why bother with a separate .css file? -->
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap');
+
+            html {
+                background-color: #111;
+                color: #eee;
+                font-family: "IBM Plex Mono", monospace;
+                font-weight: 400;
+                font-style: normal;
+                padding: 5px;
+            }
+
+            @keyframes questionmarks-anim {
+                from {
+                    transform: rotateX(0deg);
+                }
+                to {
+                    transform: rotateX(360deg);
+                }
+            }
+            #questionmarks {
+                display: inline-block;
+                animation-name: questionmarks-anim;
+                animation-timing-function: ease-in-out;
+                animation-iteration-count: infinite;
+                animation-duration: 5s;
+            }
+
+            #name {
+                background-color: #111;
+            }
+
+            #tab1 {
+                background-color: #444;
+            }
+
+            #tab1:hover {
+                background-color: #666;
+            }
+
+            #name, #tab1 {
+                font-size: 20pt;
+                display: inline-block;
+                padding-left: 5px;
+                padding-right: 5px;
+            }
+
+            #main {
+                margin-top: 10px;
+            }
+
+            td {
+                padding-right: 50px;
+            }
+
+            #failure-row {
+                color: #e74c3c;
+            }
+            #passthrough-row {
+                color: #f1c40f;
+            }
+
+            .failure_row {
+                background-color: #444;
+                margin-bottom: 20px;
+                padding: 5px;
+            }
+
+            .failure_reason {
+                margin-bottom: 10px;
+            }
+
+            .failure_body {
+                background-color: #222;
+                padding: 5px;
+                margin-left: 50px;
+                margin-bottom: 10px;
+            }
+
+            #failures-container {
+                width: 80%;
+                height: 50vh;
+                overflow-y: scroll;
+                padding: 20px;
+            }
+
+            #stats {
+                margin-top: 40px;
+                margin-bottom: 40px;
+                margin-left: 20px;
+            }
+
+            #failures-header {
+                font-size: 16pt;
+                display: inline-block;  
+                margin-left: 20px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="name">tinyq<div id="questionmarks">????</div>a</div>
+        <div id="tab1">Live stats</div>
+        <div id="main">
+            <table id="stats">
+            <tr>
+                <td>Search queries success count</td>
+                <td><div hx-get="/search_queries_success_count" hx-trigger="load, every 1s"></div></td>
+            </tr>
+            <tr id="failure-row">
+                <td>Search queries failure count (forwarded to OpenSearch)</td>
+                <td><div hx-get="/search_queries_failure_count" hx-trigger="load, every 1s"></div></td>
+            </tr>
+            <tr id="passthrough-row">
+                <td>Non-search requests passed through to OpenSearch</td>
+                <td><div hx-get="/nonsearch_passed_through_count" hx-trigger="load, every 1s"></div></td>
+            </tr>
+            </table>
+            <div id="failures-header">Latest failures</div>
+            <div id="failures-container">
+                <div hx-get="/search_queries_failures" hx-trigger="load, every 1s"></div>
+            </div>
+        </div>
+    </body>
+</html>

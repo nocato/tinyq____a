@@ -98,3 +98,10 @@ If it's a query without any filtering (exact same query as seen above), the code
 
 In any other case, it will fall back to sending the request to the OpenSearch node. This way we can incrementally extend the compatibility.
 
+## Step 4 - basic frontend
+
+Let's add a basic frontend that shows some basic statistics and a list of recent requests. The frontend will use [HTMX](https://htmx.org/), constantly showing the latest metrics.
+
+![Status page](./assets/screenshot5.gif)
+
+The failures in this short clip correspond to trying to execute a query with some filters, while succesful queries are the ones without any filters.
