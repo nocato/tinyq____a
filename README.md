@@ -71,3 +71,17 @@ POST /.kibana/_search?size=10000&from=0&_source=index-pattern.title%2Cnamespace%
 POST /_mget
 GET /.kibana/_doc/config%3A2.13.0
 ```
+
+## Step 2 - proxy
+
+Inspired by [KETCHUP project](https://hydrolix.io/blog/ketchup-elastic-to-sql/#what-is-ketchup) we will set up a proxy between the dashboard and the node. At first the proxy will just forward all the requests to OpenSearch nodes, but over time it will be extended to translate some queries and send them to a different DB. We will write it in Rust and use the [`hyper`](https://github.com/hyperium/hyper) library. [`gateway.rs`](https://github.com/hyperium/hyper/blob/master/examples/gateway.rs) is a convenient starting point.
+
+Additionally, we have to adjust `docker-compose.yml` file to use the default network (and be able to access the proxy started outside the Docker) and point `OPENSEARCH_HOSTS` to the proxy.
+
+After relaunching all the nodes, we can validate that the OpenSearch Dashboard tries to use the proxy by purposefully forgetting to turn it on and expecting failures:
+
+![Expected failures without proxy](./assets/screenshot2.png)
+
+but once we turn on the proxy (`cd proxy; cargo run`) it correctly routes requests and the dashboard works as expected.
+
+![Proxy handling requests](./assets/screenshot3.png)
