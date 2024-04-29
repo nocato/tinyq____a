@@ -120,3 +120,10 @@ This will match all documents that contain `it` or `chance` and we will implemen
 
 Note that the highlighting feature is not working since the implementation doesn't yet return a proper `highlight` response.
 
+## Step 6 - all remaining features
+
+![Owl 1](./assets/owl1.png)
+
+...or more accurately:
+
+![Owl 2](./assets/owl2.png)
