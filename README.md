@@ -2,6 +2,8 @@
 
 ## Step 1 - initial research
 
+[Relevant commit](https://github.com/nocato/tinyq____a/commit/af12baa6beff4c3c40079c3e2f945695ee86e441)
+
 Let's start our investigation by looking into what type of requests OpenSearch Dashboards (aka Kibana?) does to OpenSearch nodes (aka Elasticsearch nodes?) - capturing the traffic with Wireshark.
 We'll start with the example [`docker-compose.yml` file from OpenSearch download page](https://opensearch.org/downloads.html):
 
@@ -74,6 +76,8 @@ GET /.kibana/_doc/config%3A2.13.0
 
 ## Step 2 - proxy
 
+[Relevant commit](https://github.com/nocato/tinyq____a/commit/5d9154243306450bbdbd3f8858018cfbd780ad89)
+
 Inspired by [KETCHUP project](https://hydrolix.io/blog/ketchup-elastic-to-sql/#what-is-ketchup) we will set up a proxy between the dashboard and the node. At first the proxy will just forward all the requests to OpenSearch nodes, but over time it will be extended to translate some queries and send them to a different DB. We will write it in Rust and use the [`hyper`](https://github.com/hyperium/hyper) library. [`gateway.rs`](https://github.com/hyperium/hyper/blob/master/examples/gateway.rs) is a convenient starting point.
 
 Additionally, we have to adjust `docker-compose.yml` file to use the default network (and be able to access the proxy started outside the Docker) and point `OPENSEARCH_HOSTS` to the proxy.
@@ -88,6 +92,8 @@ but once we turn on the proxy (`cd proxy; cargo run`) it correctly routes reques
 
 ## Step 3 - hijacking requests
 
+[Relevant commit](https://github.com/nocato/tinyq____a/commit/5a1a15f8e57f0c6775e52acd4388b45719899b42)
+
 Now the fun part - let's handle some request on our own, without sending it to OpenSearch nodes. For now, we'll focus only on the most basic query - without any filtering and fallback to OpenSearch nodes otherwise.
 
 The proxy code now will read the entire request and if it's a request to the `_search` endpoint it will try to parse and validate it.
@@ -100,6 +106,8 @@ In any other case, it will fall back to sending the request to the OpenSearch no
 
 ## Step 4 - basic frontend
 
+[Relevant commit](https://github.com/nocato/tinyq____a/commit/842aedb6b62afb99554ed39113d8a38a73641cb6)
+
 Let's add a basic frontend that shows some basic statistics and a list of recent requests. The frontend will use [HTMX](https://htmx.org/), constantly showing the latest metrics.
 
 ![Status page](./assets/screenshot5.gif)
@@ -107,6 +115,8 @@ Let's add a basic frontend that shows some basic statistics and a list of recent
 The failures in this short clip correspond to trying to execute a query with some filters, while succesful queries are the ones without any filters.
 
 ## Step 5 - implementing `multi_match` filter
+
+[Relevant commit](https://github.com/nocato/tinyq____a/commit/238ab1fb6d8f45ef4added4c48189601aa1e05ab)
 
 An example usage of `multi_match` filter looks like this:
 
@@ -121,6 +131,8 @@ This will match all documents that contain `it` or `chance` and we will implemen
 Note that the highlighting feature is not working since the implementation doesn't yet return a proper `highlight` response.
 
 ## Step 6 - all remaining features
+
+[Relevant commit?](https://github.com/nocato/tinyq____a/commit/ae86cb2fa00f0fb98c69ab33835c39fb9d3cc0dd)
 
 ![Owl 1](./assets/owl1.png)
 
