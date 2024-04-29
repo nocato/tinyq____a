@@ -73,9 +73,7 @@ async fn forward_request_to_opensearch(
 // Parsing _search request:
 
 struct ParsedSearchRequest {
-    // It's empty for now, but in the future
-    // this will contain the details of the search request,
-    // for example applied filters.
+    multi_match: String,
 }
 
 fn parse_options(
@@ -97,7 +95,73 @@ fn parse_options(
     Ok(())
 }
 
-fn parse_body(body: &Value, _parsed: &mut ParsedSearchRequest) -> Result<(), String> {
+// Parse query filters like match_all or multi_match
+fn parse_filter(
+    value: &Value,
+    filter: &serde_json::Map<String, Value>,
+    parsed: &mut ParsedSearchRequest,
+) -> Result<(), String> {
+    let filter_keys: Vec<_> = filter.keys().collect();
+    if filter_keys == vec!["match_all"] {
+        let Some(Object(match_all_filter)) = filter.get("match_all") else {
+            return Err(format!(
+                "unimplemented query value - unexpected match_all filter: {}",
+                value
+            ));
+        };
+        if !match_all_filter.keys().collect::<Vec<_>>().is_empty() {
+            return Err(format!(
+                "unimplemented query value - non-empty match_all filter: {}",
+                value
+            ));
+        }
+    } else if filter_keys == vec!["multi_match"] {
+        let Some(Object(multi_match_filter)) = filter.get("multi_match") else {
+            return Err(format!(
+                "unimplemented query value - unexpected multi_match filter: {}",
+                value
+            ));
+        };
+        for (filter_key, filter_value) in multi_match_filter {
+            match filter_key.as_str() {
+                "lenient" => {}
+                "type" => {
+                    if *filter_value != "best_fields" {
+                        return Err(format!(
+                            "unimplemented multi_match type value: {}",
+                            filter_value
+                        ));
+                    }
+                }
+                "query" => {
+                    if let Value::String(filter_value) = filter_value {
+                        parsed.multi_match = filter_value.clone();
+                    } else {
+                        return Err(format!(
+                            "unimplemented multi_match query value: {}",
+                            filter_value
+                        ));
+                    }
+                }
+                _ => {
+                    return Err(format!(
+                        "unimplemented multi_match parameter: {}",
+                        filter_key
+                    ));
+                }
+            }
+        }
+    } else {
+        return Err(format!(
+            "unimplemented query value - unexpected filter: {}",
+            value
+        ));
+    }
+
+    Ok(())
+}
+
+fn parse_body(body: &Value, parsed: &mut ParsedSearchRequest) -> Result<(), String> {
     let Object(map) = body else {
         return Err(format!(
             "expected JSON object in search body but got {}",
@@ -168,25 +232,7 @@ fn parse_body(body: &Value, _parsed: &mut ParsedSearchRequest) -> Result<(), Str
                 let Some(Object(filter)) = filter.first() else {
                     return Err(format!("unimplemented query value - expected first element of 'filter' to be JSON object: {}", value));
                 };
-                let filter_keys: Vec<_> = filter.keys().collect();
-                if filter_keys != vec!["match_all"] {
-                    return Err(format!(
-                        "unimplemented query value - unexpected filter: {}",
-                        value
-                    ));
-                }
-                let Some(Object(match_all_filter)) = filter.get("match_all") else {
-                    return Err(format!(
-                        "unimplemented query value - unexpected match_all filter: {}",
-                        value
-                    ));
-                };
-                if !match_all_filter.keys().collect::<Vec<_>>().is_empty() {
-                    return Err(format!(
-                        "unimplemented query value - non-empty match_all filter: {}",
-                        value
-                    ));
-                }
+                parse_filter(value, filter, parsed)?;
 
                 let Some(Array(must)) = query.get("must") else {
                     return Err(format!(
@@ -259,7 +305,9 @@ fn parse_body(body: &Value, _parsed: &mut ParsedSearchRequest) -> Result<(), Str
 async fn handle_search_request(
     req: &Request<Bytes>,
 ) -> Result<Response<http_body_util::Full<hyper::body::Bytes>>, String> {
-    let mut parsed_request: ParsedSearchRequest = ParsedSearchRequest {};
+    let mut parsed_request: ParsedSearchRequest = ParsedSearchRequest {
+        multi_match: "".to_string(),
+    };
 
     let options: Vec<Vec<_>> = req
         .uri()
@@ -274,6 +322,16 @@ async fn handle_search_request(
     parse_options(&options, &mut parsed_request)?;
     parse_body(&body, &mut parsed_request)?;
 
+    let mut result = vec!["Through the fire, to the limit, to the wall, For a chance to be with you, I'd gladly risk it all.", 
+        "You tell me you're gonna play it smart, We're through before we start, But I believe that we've only just begun",
+        "When it's this good, there's no saying no"
+        ];
+
+    if !parsed_request.multi_match.is_empty() {
+        let multi_match: Vec<_> = parsed_request.multi_match.split(' ').collect();
+        result.retain(|result| multi_match.iter().any(|mm| result.contains(mm)));
+    }
+
     let result = json!({
         "took": 0,
         "timed_out": false,
@@ -285,36 +343,18 @@ async fn handle_search_request(
         },
         "hits": {
             "total": {
-                "value": 3,
+                "value": result.len(),
                 "relation": "eq",
             },
             "max_score": 0.0,
-            "hits": [
-                {
+            "hits": result.iter().map(|r| json!({
                     "_index":"my-first-index",
                     "_id":"1",
                     "_version":5,
                     "_score":0.0,
                     "_source":
-                        {"Description": "Through the fire, to the limit, to the wall, For a chance to be with you, I'd gladly risk it all."}
-                },
-                {
-                    "_index":"my-first-index",
-                    "_id":"2",
-                    "_version":1,
-                    "_score":0.0,
-                    "_source":
-                        {"Description": "You tell me you're gonna play it smart, We're through before we start, But I believe that we've only just begun"}
-                },
-                {
-                    "_index":"my-first-index",
-                    "_id":"3",
-                    "_version":1,
-                    "_score":0.0,
-                    "_source":
-                        {"Description": "When it's this good, there's no saying no"}
-                }
-            ]
+                        {"Description": r}
+                })).collect::<Vec<_>>()
         }
     });
 

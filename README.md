@@ -105,3 +105,18 @@ Let's add a basic frontend that shows some basic statistics and a list of recent
 ![Status page](./assets/screenshot5.gif)
 
 The failures in this short clip correspond to trying to execute a query with some filters, while succesful queries are the ones without any filters.
+
+## Step 5 - implementing `multi_match` filter
+
+An example usage of `multi_match` filter looks like this:
+
+```
+{"filter":[{"multi_match":{"lenient":true,"query":"it chance","type":"best_fields"}}
+```
+
+This will match all documents that contain `it` or `chance` and we will implement only this basic behavior of this filter.
+
+![`multi_match` filter](./assets/screenshot6.gif)
+
+Note that the highlighting feature is not working since the implementation doesn't yet return a proper `highlight` response.
+
