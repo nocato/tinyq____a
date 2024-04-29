@@ -1,5 +1,19 @@
 # tinyq????a
 
+### Quickstart
+
+You are encouraged to read the writeup first (steps below). The result of this writeup (a small PoC) can be started with:
+
+``` bash
+sudo sysctl -w vm.max_map_count=262144
+docker-compose up
+# in parallel to docker-compose:
+cd proxy
+cargo run
+```
+
+Please note that it was only tested on Linux with Docker (not Podman). Your milage may vary on other OSes.
+
 ## Step 1 - initial research
 
 [Relevant commit](https://github.com/nocato/tinyq____a/commit/af12baa6beff4c3c40079c3e2f945695ee86e441)
